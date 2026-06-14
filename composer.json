@@ -1,0 +1,20 @@
+{
+  "name": "correios-seller/wcfm-shipping",
+  "description": "Frete Correios por seller para WooCommerce/WCFM Marketplace.",
+  "type": "wordpress-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "CorreiosSeller\\": "src/"
+    }
+  },
+  "scripts": {
+    "lint": "php -l correios-seller.php && find src -name '*.php' -print0 | xargs -0 -n1 php -l"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}

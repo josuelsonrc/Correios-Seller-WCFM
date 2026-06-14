@@ -1,0 +1,91 @@
+.correios-seller-product-shipping {
+  clear: both;
+  margin: 18px 0;
+  max-width: 420px;
+}
+
+.correios-seller-product-shipping__label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.correios-seller-product-shipping__row {
+  display: flex;
+  gap: 8px;
+}
+
+.correios-seller-product-shipping__postcode {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.correios-seller-product-shipping__button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.correios-seller-product-shipping__button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.correios-seller-product-shipping__result {
+  font-size: 0.92em;
+  margin-top: 10px;
+}
+
+.correios-seller-product-shipping__result.is-error {
+  color: #b32d2e;
+}
+
+.correios-seller-product-shipping__result.is-empty,
+.correios-seller-product-shipping__result.is-loading {
+  color: #50575e;
+}
+
+.correios-seller-product-shipping__rates {
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.correios-seller-product-shipping__rate {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  margin: 0;
+  padding: 10px 0;
+}
+
+.correios-seller-product-shipping__rate-main {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.correios-seller-product-shipping__rate-label {
+  font-weight: 600;
+}
+
+.correios-seller-product-shipping__rate-cost {
+  white-space: nowrap;
+}
+
+.correios-seller-product-shipping__rate-meta {
+  color: #646970;
+  display: block;
+  font-size: 0.9em;
+  margin-top: 3px;
+}
+
+@media (max-width: 420px) {
+  .correios-seller-product-shipping__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .correios-seller-product-shipping__button {
+    width: 100%;
+  }
+}
