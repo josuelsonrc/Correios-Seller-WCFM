@@ -1,6 +1,6 @@
 {
-  "name": "correios-seller/wcfm-shipping",
-  "description": "Frete Correios por seller para WooCommerce/WCFM Marketplace.",
+  "name": "frete-marketplace/wcfm-melhor-envio",
+  "description": "Frete Melhor Envio por seller para WooCommerce/WCFM Marketplace.",
   "type": "wordpress-plugin",
   "license": "proprietary",
   "require": {

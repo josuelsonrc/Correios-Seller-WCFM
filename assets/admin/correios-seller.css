@@ -2,3 +2,83 @@
   display: grid;
   gap: 16px;
 }
+
+#wcfm_settings_form_correios_seller_expander .store_address {
+  max-width: 920px;
+}
+
+#wcfm_settings_form_correios_seller_expander .store_address::after {
+  clear: both;
+  content: "";
+  display: table;
+}
+
+#wcfm_settings_form_correios_seller_expander .wcfm_vendor_settings_heading,
+#wcfm_settings_form_correios_seller_expander .wcfm_clearfix,
+#wcfm_settings_form_correios_seller_expander p.description {
+  clear: both;
+}
+
+#wcfm_settings_form_correios_seller_expander .wcfm_vendor_settings_heading {
+  margin: 22px 0 10px;
+}
+
+#wcfm_settings_form_correios_seller_expander .wcfm_vendor_settings_heading h2 {
+  line-height: 1.3;
+  margin: 0;
+}
+
+#wcfm_settings_form_correios_seller_expander p.description {
+  display: block;
+  margin: 2px 0 14px;
+  max-width: 680px;
+}
+
+#wcfm_settings_form_correios_seller_expander .store_address > .wcfm_title {
+  box-sizing: border-box;
+  clear: both !important;
+  float: left !important;
+  margin: 10px 0 8px !important;
+  padding-right: 18px;
+  width: 34% !important;
+}
+
+#wcfm_settings_form_correios_seller_expander .store_address > input.wcfm-text,
+#wcfm_settings_form_correios_seller_expander .store_address > select.wcfm-select,
+#wcfm_settings_form_correios_seller_expander .store_address > textarea.wcfm-textarea {
+  box-sizing: border-box;
+  clear: none !important;
+  float: left !important;
+  margin: 6px 0 8px !important;
+  max-width: 560px;
+  min-height: 34px;
+  width: 66% !important;
+}
+
+#wcfm_settings_form_correios_seller_expander .store_address > textarea.wcfm-textarea {
+  min-height: 74px;
+}
+
+#wcfm_settings_form_correios_seller_expander .store_address > input.wcfm-checkbox {
+  clear: none !important;
+  float: left !important;
+  height: 16px;
+  margin: 10px 0 8px !important;
+  width: 16px !important;
+}
+
+@media (max-width: 782px) {
+  #wcfm_settings_form_correios_seller_expander .store_address > .wcfm_title,
+  #wcfm_settings_form_correios_seller_expander .store_address > input.wcfm-text,
+  #wcfm_settings_form_correios_seller_expander .store_address > select.wcfm-select,
+  #wcfm_settings_form_correios_seller_expander .store_address > textarea.wcfm-textarea {
+    clear: both !important;
+    float: none !important;
+    max-width: none;
+    width: 100% !important;
+  }
+
+  #wcfm_settings_form_correios_seller_expander .store_address > input.wcfm-checkbox {
+    float: none !important;
+  }
+}

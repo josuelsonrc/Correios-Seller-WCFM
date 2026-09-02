@@ -20,6 +20,7 @@ final class VendorSettingsRepository
             'origin_postcode' => '',
             'posting_address' => '',
             'sender_name' => '',
+            'sender_email' => '',
             'sender_document' => '',
             'sender_phone' => '',
             'sender_street' => '',
@@ -34,12 +35,10 @@ final class VendorSettingsRepository
             'default_height' => '2',
             'handling_days' => '0',
             'enabled' => 'yes',
-            'credential_mode' => 'inherit',
-            'admin_code' => '',
-            'posting_card' => '',
-            'api_username' => '',
-            'api_password' => '',
-            'enabled_services' => [],
+            'melhor_envio_access_token' => '',
+            'melhor_envio_refresh_token' => '',
+            'melhor_envio_token_expires_at' => 0,
+            'melhor_envio_enabled_services' => [],
         ]);
     }
 
@@ -48,7 +47,16 @@ final class VendorSettingsRepository
      */
     public function save(int $vendorId, array $settings): void
     {
-        update_user_meta($vendorId, self::META_KEY, $this->sanitize($settings));
+        $merged = array_merge($this->get($vendorId), $settings);
+        update_user_meta($vendorId, self::META_KEY, $this->sanitize($merged));
+    }
+
+    /**
+     * @param array<string,mixed> $settings
+     */
+    public function merge(int $vendorId, array $settings): void
+    {
+        $this->save($vendorId, $settings);
     }
 
     /**
@@ -57,15 +65,16 @@ final class VendorSettingsRepository
      */
     public function sanitize(array $settings): array
     {
-        $services = $settings['enabled_services'] ?? [];
-        if (is_string($services)) {
-            $services = explode(',', $services);
+        $melhorEnvioServices = $settings['melhor_envio_enabled_services'] ?? [];
+        if (is_string($melhorEnvioServices)) {
+            $melhorEnvioServices = explode(',', $melhorEnvioServices);
         }
 
         return [
             'origin_postcode' => preg_replace('/\D+/', '', (string) ($settings['origin_postcode'] ?? '')),
             'posting_address' => sanitize_textarea_field((string) ($settings['posting_address'] ?? '')),
             'sender_name' => sanitize_text_field((string) ($settings['sender_name'] ?? '')),
+            'sender_email' => sanitize_email((string) ($settings['sender_email'] ?? '')),
             'sender_document' => preg_replace('/\D+/', '', (string) ($settings['sender_document'] ?? '')),
             'sender_phone' => preg_replace('/\D+/', '', (string) ($settings['sender_phone'] ?? '')),
             'sender_street' => sanitize_text_field((string) ($settings['sender_street'] ?? '')),
@@ -80,12 +89,10 @@ final class VendorSettingsRepository
             'default_height' => wc_format_decimal($settings['default_height'] ?? '2'),
             'handling_days' => absint($settings['handling_days'] ?? 0),
             'enabled' => (($settings['enabled'] ?? 'yes') === 'yes') ? 'yes' : 'no',
-            'credential_mode' => in_array(($settings['credential_mode'] ?? 'inherit'), ['inherit', 'vendor'], true) ? $settings['credential_mode'] : 'inherit',
-            'admin_code' => sanitize_text_field((string) ($settings['admin_code'] ?? '')),
-            'posting_card' => sanitize_text_field((string) ($settings['posting_card'] ?? '')),
-            'api_username' => sanitize_text_field((string) ($settings['api_username'] ?? '')),
-            'api_password' => sanitize_text_field((string) ($settings['api_password'] ?? '')),
-            'enabled_services' => array_values(array_filter(array_map(static fn ($service) => preg_replace('/\D+/', '', (string) $service), (array) $services))),
+            'melhor_envio_access_token' => sanitize_text_field((string) ($settings['melhor_envio_access_token'] ?? '')),
+            'melhor_envio_refresh_token' => sanitize_text_field((string) ($settings['melhor_envio_refresh_token'] ?? '')),
+            'melhor_envio_token_expires_at' => absint($settings['melhor_envio_token_expires_at'] ?? 0),
+            'melhor_envio_enabled_services' => array_values(array_filter(array_map(static fn ($service) => preg_replace('/\D+/', '', (string) $service), (array) $melhorEnvioServices))),
         ];
     }
 }

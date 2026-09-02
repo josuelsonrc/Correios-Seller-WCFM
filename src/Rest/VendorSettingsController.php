@@ -41,7 +41,7 @@ final class VendorSettingsController
 
     public function show(WP_REST_Request $request): WP_REST_Response
     {
-        return new WP_REST_Response($this->repository->get(get_current_user_id()));
+        return new WP_REST_Response($this->responseSettings(get_current_user_id()));
     }
 
     public function update(WP_REST_Request $request): WP_REST_Response
@@ -49,6 +49,21 @@ final class VendorSettingsController
         $params = (array) $request->get_json_params();
         $this->repository->save(get_current_user_id(), $params);
 
-        return new WP_REST_Response($this->repository->get(get_current_user_id()));
+        return new WP_REST_Response($this->responseSettings(get_current_user_id()));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function responseSettings(int $vendorId): array
+    {
+        $settings = $this->repository->get($vendorId);
+        $settings['melhor_envio_connected'] = ! empty($settings['melhor_envio_access_token']);
+        unset(
+            $settings['melhor_envio_access_token'],
+            $settings['melhor_envio_refresh_token']
+        );
+
+        return $settings;
     }
 }

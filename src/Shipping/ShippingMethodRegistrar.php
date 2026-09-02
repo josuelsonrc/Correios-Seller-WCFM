@@ -14,12 +14,12 @@ final class ShippingMethodRegistrar
 
     public function loadShippingMethod(): void
     {
-        require_once CORREIOS_SELLER_PATH . 'src/Shipping/WCFMCorreiosShippingMethod.php';
+        require_once FRETE_MARKETPLACE_PATH . 'src/Shipping/WCFMMarketplaceShippingMethod.php';
     }
 
     public function addShippingMethod(array $methods): array
     {
-        $methods['correios_seller'] = WCFMCorreiosShippingMethod::class;
+        $methods[WCFMMarketplaceShippingMethod::METHOD_ID] = WCFMMarketplaceShippingMethod::class;
 
         return $methods;
     }

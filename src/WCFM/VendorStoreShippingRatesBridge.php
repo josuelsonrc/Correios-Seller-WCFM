@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CorreiosSeller\WCFM;
 
+use CorreiosSeller\Shipping\WCFMMarketplaceShippingMethod;
 use CorreiosSeller\Support\Logger;
 use Throwable;
 
@@ -13,6 +14,9 @@ final class VendorStoreShippingRatesBridge
 
     private bool $resolving = false;
 
+    /** @var array<string,array<string,\WC_Shipping_Rate>> */
+    private array $apiRates = [];
+
     public function __construct(private Logger $logger)
     {
     }
@@ -20,6 +24,39 @@ final class VendorStoreShippingRatesBridge
     public function register(): void
     {
         add_filter('woocommerce_package_rates', [$this, 'mergeApplicableVendorRates'], 30, 2);
+        add_filter('woocommerce_package_rates', [$this, 'captureApiRates'], 90, 2);
+        add_filter('woocommerce_package_rates', [$this, 'restoreApiRates'], 110, 2);
+    }
+
+    /**
+     * @param array<string,\WC_Shipping_Rate> $rates
+     * @param array<string,mixed> $package
+     * @return array<string,\WC_Shipping_Rate>
+     */
+    public function captureApiRates(array $rates, array $package): array
+    {
+        $captured = [];
+        foreach ($rates as $rateId => $rate) {
+            if ($rate instanceof \WC_Shipping_Rate && $rate->get_method_id() === WCFMMarketplaceShippingMethod::METHOD_ID) {
+                $captured[$rateId] = $rate;
+            }
+        }
+
+        if ($captured !== []) {
+            $this->apiRates[$this->packageKey($package)] = $captured;
+        }
+
+        return $rates;
+    }
+
+    /**
+     * @param array<string,\WC_Shipping_Rate> $rates
+     * @param array<string,mixed> $package
+     * @return array<string,\WC_Shipping_Rate>
+     */
+    public function restoreApiRates(array $rates, array $package): array
+    {
+        return $rates + ($this->apiRates[$this->packageKey($package)] ?? []);
     }
 
     /**
@@ -151,5 +188,27 @@ final class VendorStoreShippingRatesBridge
         return \WC_Cache_Helper::get_cache_prefix('shipping_zones')
             . 'wc_shipping_zone_'
             . md5(sprintf('%s+%s+%s', $country, $state, $postcode));
+    }
+
+    /**
+     * @param array<string,mixed> $package
+     */
+    private function packageKey(array $package): string
+    {
+        $contents = [];
+        foreach ((array) ($package['contents'] ?? []) as $itemKey => $item) {
+            $product = $item['data'] ?? null;
+            $contents[] = [
+                'key' => (string) $itemKey,
+                'product_id' => $product instanceof \WC_Product ? $product->get_id() : 0,
+                'quantity' => (int) ($item['quantity'] ?? 0),
+            ];
+        }
+
+        return md5(wp_json_encode([
+            'vendor_id' => (int) ($package['vendor_id'] ?? $package['seller_id'] ?? 0),
+            'destination' => $package['destination'] ?? [],
+            'contents' => $contents,
+        ]));
     }
 }

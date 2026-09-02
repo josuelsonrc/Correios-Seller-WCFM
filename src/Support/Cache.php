@@ -6,6 +6,18 @@ namespace CorreiosSeller\Support;
 
 final class Cache
 {
+    public function get(string $key): mixed
+    {
+        return get_transient($this->key($key));
+    }
+
+    public function put(string $key, mixed $value, int $ttl): void
+    {
+        $cacheKey = $this->key($key);
+        set_transient($cacheKey, $value, max(60, $ttl));
+        set_transient($cacheKey . '_last_good', $value, DAY_IN_SECONDS * 7);
+    }
+
     public function remember(string $key, int $ttl, callable $callback): mixed
     {
         $cacheKey = $this->key($key);
@@ -16,8 +28,7 @@ final class Cache
         }
 
         $value = $callback();
-        set_transient($cacheKey, $value, max(60, $ttl));
-        set_transient($cacheKey . '_last_good', $value, DAY_IN_SECONDS * 7);
+        $this->put($key, $value, $ttl);
 
         return $value;
     }
@@ -29,6 +40,6 @@ final class Cache
 
     private function key(string $key): string
     {
-        return 'correios_seller_' . md5($key);
+        return 'frete_marketplace_' . md5($key);
     }
 }

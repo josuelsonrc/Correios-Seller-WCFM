@@ -9,8 +9,10 @@ use CorreiosSeller\Support\Options;
 
 final class ProductShippingSimulator
 {
-    private const ACTION = 'correios_seller_product_shipping_rates';
-    private const NONCE_ACTION = 'correios_seller_product_shipping';
+    private const ACTION = 'frete_marketplace_product_shipping_rates';
+    private const LEGACY_ACTION = 'correios_seller_product_shipping_rates';
+    private const NONCE_ACTION = 'frete_marketplace_product_shipping';
+    private const LEGACY_NONCE_ACTION = 'correios_seller_product_shipping';
 
     private bool $rendered = false;
 
@@ -27,6 +29,8 @@ final class ProductShippingSimulator
         add_action('woocommerce_single_product_summary', [$this, 'render'], 35);
         add_action('wp_ajax_' . self::ACTION, [$this, 'handleAjax']);
         add_action('wp_ajax_nopriv_' . self::ACTION, [$this, 'handleAjax']);
+        add_action('wp_ajax_' . self::LEGACY_ACTION, [$this, 'handleAjax']);
+        add_action('wp_ajax_nopriv_' . self::LEGACY_ACTION, [$this, 'handleAjax']);
     }
 
     public function enqueueAssets(): void
@@ -38,29 +42,31 @@ final class ProductShippingSimulator
         $config = $this->frontendConfig();
         $nativeScriptHandle = $this->nativeThemeScriptHandle();
         if ($nativeScriptHandle !== '' && wp_script_is($nativeScriptHandle, 'enqueued')) {
+            wp_localize_script($nativeScriptHandle, 'FreteMarketplaceProductShipping', $config);
             wp_localize_script($nativeScriptHandle, 'CorreiosSellerProductShipping', $config);
 
             return;
         }
 
-        $scriptPath = CORREIOS_SELLER_PATH . 'assets/js/product-shipping-simulator.js';
-        $stylePath = CORREIOS_SELLER_PATH . 'assets/css/product-shipping-simulator.css';
+        $scriptPath = FRETE_MARKETPLACE_PATH . 'assets/js/product-shipping-simulator.js';
+        $stylePath = FRETE_MARKETPLACE_PATH . 'assets/css/product-shipping-simulator.css';
 
         wp_enqueue_style(
             'correios-seller-product-shipping',
-            CORREIOS_SELLER_URL . 'assets/css/product-shipping-simulator.css',
+            FRETE_MARKETPLACE_URL . 'assets/css/product-shipping-simulator.css',
             [],
-            file_exists($stylePath) ? (string) filemtime($stylePath) : CORREIOS_SELLER_VERSION
+            file_exists($stylePath) ? (string) filemtime($stylePath) : FRETE_MARKETPLACE_VERSION
         );
 
         wp_enqueue_script(
             'correios-seller-product-shipping',
-            CORREIOS_SELLER_URL . 'assets/js/product-shipping-simulator.js',
+            FRETE_MARKETPLACE_URL . 'assets/js/product-shipping-simulator.js',
             [],
-            file_exists($scriptPath) ? (string) filemtime($scriptPath) : CORREIOS_SELLER_VERSION,
+            file_exists($scriptPath) ? (string) filemtime($scriptPath) : FRETE_MARKETPLACE_VERSION,
             true
         );
 
+        wp_localize_script('correios-seller-product-shipping', 'FreteMarketplaceProductShipping', $config);
         wp_localize_script('correios-seller-product-shipping', 'CorreiosSellerProductShipping', $config);
     }
 
@@ -103,7 +109,10 @@ final class ProductShippingSimulator
 
     public function handleAjax(): void
     {
-        if (! check_ajax_referer(self::NONCE_ACTION, 'nonce', false)) {
+        if (
+            ! check_ajax_referer(self::NONCE_ACTION, 'nonce', false)
+            && ! check_ajax_referer(self::LEGACY_NONCE_ACTION, 'nonce', false)
+        ) {
             wp_send_json_error(['message' => __('Sessao expirada. Recarregue a pagina.', 'correios-seller')], 403);
         }
 
@@ -147,6 +156,7 @@ final class ProductShippingSimulator
         }
 
         $package = $this->packageFactory->build($product, $quantity, $postcode);
+        $package = (array) apply_filters('frete_marketplace_product_shipping_package', $package, $product, $quantity, $postcode);
         $package = (array) apply_filters('correios_seller_product_shipping_package', $package, $product, $quantity, $postcode);
         $cacheKey = $this->cacheKey($package, $product, $quantity, $postcode);
 
@@ -159,13 +169,14 @@ final class ProductShippingSimulator
 
         $calculated = WC()->shipping()->calculate_shipping_for_package(
             $package,
-            'correios_seller_product_' . md5($cacheKey)
+            'frete_marketplace_product_' . md5($cacheKey)
         );
 
         $rates = is_array($calculated) && isset($calculated['rates']) && is_array($calculated['rates'])
             ? $this->normalizeRates($calculated['rates'])
             : [];
 
+        $rates = (array) apply_filters('frete_marketplace_product_shipping_rates', $rates, $package, $product, $quantity, $postcode);
         $rates = (array) apply_filters('correios_seller_product_shipping_rates', $rates, $package, $product, $quantity, $postcode);
         set_transient($cacheKey, $rates, (int) Options::get('product_simulator_cache_ttl', 300));
 
@@ -256,7 +267,7 @@ final class ProductShippingSimulator
         }
 
         $payload = [
-            'plugin_version' => defined('CORREIOS_SELLER_VERSION') ? CORREIOS_SELLER_VERSION : '',
+            'plugin_version' => defined('FRETE_MARKETPLACE_VERSION') ? FRETE_MARKETPLACE_VERSION : '',
             'package' => $packageForHash,
             'product_id' => $product->get_id(),
             'quantity' => $quantity,
@@ -265,7 +276,7 @@ final class ProductShippingSimulator
             'coupons' => WC()->cart ? WC()->cart->get_applied_coupons() : [],
         ];
 
-        return 'correios_seller_product_rates_' . md5(wp_json_encode($payload));
+        return 'frete_marketplace_product_rates_' . md5(wp_json_encode($payload));
     }
 
     private function formatPostcode(string $postcode): string
@@ -294,10 +305,15 @@ final class ProductShippingSimulator
 
     private function nativeThemeScriptHandle(): string
     {
-        $support = get_theme_support('correios-seller-product-shipping');
+        $support = get_theme_support('frete-marketplace-product-shipping');
+        if (! is_array($support)) {
+            $support = get_theme_support('correios-seller-product-shipping');
+        }
         $handle = is_array($support) && isset($support[0]['script_handle'])
             ? (string) $support[0]['script_handle']
             : '';
+
+        $handle = (string) apply_filters('frete_marketplace_product_simulator_native_script_handle', $handle);
 
         return sanitize_key((string) apply_filters('correios_seller_product_simulator_native_script_handle', $handle));
     }

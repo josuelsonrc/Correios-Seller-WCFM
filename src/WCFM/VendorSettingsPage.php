@@ -15,8 +15,21 @@ final class VendorSettingsPage
 
     public function register(): void
     {
+        add_action('wp_enqueue_scripts', [$this, 'enqueueAssets'], 30);
         add_action('wcfm_vendor_settings_after_shipping', [$this, 'renderFields'], 50, 1);
         add_action('wcfm_vendor_settings_update', [$this, 'saveFields'], 50, 2);
+    }
+
+    public function enqueueAssets(): void
+    {
+        $stylePath = FRETE_MARKETPLACE_PATH . 'assets/admin/correios-seller.css';
+
+        wp_enqueue_style(
+            'frete-marketplace-wcfm-settings',
+            FRETE_MARKETPLACE_URL . 'assets/admin/correios-seller.css',
+            [],
+            file_exists($stylePath) ? (string) filemtime($stylePath) : FRETE_MARKETPLACE_VERSION
+        );
     }
 
     public function renderFields($vendorId): void
@@ -30,7 +43,7 @@ final class VendorSettingsPage
 
         echo '<div class="page_collapsible" id="wcfm_settings_form_correios_seller_head">';
         echo '<label class="wcfmfa fa-truck"></label>';
-        echo esc_html__('Correios Seller', 'correios-seller');
+        echo esc_html__('Frete Melhor Envio', 'correios-seller');
         echo '<span></span></div>';
         echo '<div class="wcfm-container"><div id="wcfm_settings_form_correios_seller_expander" class="wcfm-content">';
         echo '<div class="wcfm_clearfix"></div>';
@@ -50,7 +63,7 @@ final class VendorSettingsPage
 
         $fields = [];
         $fields['correios_seller_enabled'] = [
-            'label' => __('Ativar Correios', 'correios-seller'),
+            'label' => __('Ativar frete por API', 'correios-seller'),
             'name' => 'correios_seller[enabled]',
             'type' => 'checkbox',
             'value' => 'yes',
@@ -65,6 +78,7 @@ final class VendorSettingsPage
             'value' => $settings['origin_postcode'],
             'class' => 'wcfm-text wcfm_ele',
             'label_class' => 'wcfm_title',
+            'hints' => __('Opcional. Se vazio, usa automaticamente o CEP do endereco da loja WCFM.', 'correios-seller'),
         ];
         $fields['correios_seller_posting_address'] = [
             'label' => __('Endereco de postagem', 'correios-seller'),
@@ -76,7 +90,7 @@ final class VendorSettingsPage
         ];
         $fields['correios_seller_sender_heading'] = [
             'type' => 'html',
-            'value' => '<div class="wcfm_clearfix"></div><div class="wcfm_vendor_settings_heading"><h2>' . esc_html__('Dados para etiqueta', 'correios-seller') . '</h2></div><div class="wcfm_clearfix"></div>',
+            'value' => '<div class="wcfm_clearfix"></div><div class="wcfm_vendor_settings_heading"><h2>' . esc_html__('Dados do remetente', 'correios-seller') . '</h2></div><div class="wcfm_clearfix"></div>',
         ];
         $fields['correios_seller_sender_name'] = [
             'label' => __('Nome do remetente', 'correios-seller'),
@@ -86,6 +100,15 @@ final class VendorSettingsPage
             'class' => 'wcfm-text wcfm_ele',
             'label_class' => 'wcfm_title',
             'hints' => __('Opcional. Se vazio, usa o nome da loja no WCFM.', 'correios-seller'),
+        ];
+        $fields['correios_seller_sender_email'] = [
+            'label' => __('E-mail do remetente', 'correios-seller'),
+            'name' => 'correios_seller[sender_email]',
+            'type' => 'email',
+            'value' => $settings['sender_email'],
+            'class' => 'wcfm-text wcfm_ele',
+            'label_class' => 'wcfm_title',
+            'hints' => __('Opcional. Se vazio, usa o e-mail do usuario vendedor.', 'correios-seller'),
         ];
         $fields['correios_seller_sender_document'] = [
             'label' => __('CPF/CNPJ do remetente', 'correios-seller'),
@@ -205,72 +228,58 @@ final class VendorSettingsPage
             'label_class' => 'wcfm_title',
             'attributes' => ['step' => '1', 'min' => '0'],
         ];
-        $fields['correios_seller_credentials_heading'] = [
+        $centralized = Options::melhorEnvioAccountMode() === 'admin';
+
+        return $this->addMelhorEnvioFields($fields, $settings, $centralized);
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $fields
+     * @param array<string,mixed> $settings
+     * @return array<string,array<string,mixed>>
+     */
+    private function addMelhorEnvioFields(array $fields, array $settings, bool $centralized): array
+    {
+        $connected = ! empty($settings['melhor_envio_access_token']);
+        $fields['correios_seller_melhor_envio_heading'] = [
             'type' => 'html',
-            'value' => '<div class="wcfm_clearfix"></div><div class="wcfm_vendor_settings_heading"><h2>' . esc_html__('Credenciais Correios', 'correios-seller') . '</h2></div><div class="wcfm_clearfix"></div>',
+            'value' => '<div class="wcfm_clearfix"></div><div class="wcfm_vendor_settings_heading"><h2>' . esc_html__('Melhor Envio', 'correios-seller') . '</h2></div><div class="wcfm_clearfix"></div>'
+                . ($centralized ? '<p class="description">' . esc_html__('A conta do Melhor Envio e centralizada pelo marketplace. A cotacao usa o seu CEP de origem.', 'correios-seller') . '</p>' : $this->melhorEnvioConnectionHtml($connected)),
+        ];
+        $fields['correios_seller_melhor_envio_enabled_services'] = [
+            'label' => __('Servicos Melhor Envio', 'correios-seller'),
+            'name' => 'correios_seller[melhor_envio_enabled_services]',
+            'type' => 'text',
+            'value' => implode(',', (array) $settings['melhor_envio_enabled_services']),
+            'class' => 'wcfm-text wcfm_ele',
+            'label_class' => 'wcfm_title',
+            'hints' => __('IDs separados por virgula. Vazio usa o padrao do marketplace: Correios e Jadlog.', 'correios-seller'),
         ];
 
-        if (Options::get('logistics_responsibility', 'marketplace') === 'marketplace') {
-            $fields['correios_seller_credentials_heading']['value'] .= '<p class="description">' . esc_html__('O marketplace e o responsavel logistico. As etiquetas e cotacoes usam o contrato Correios central configurado pelo admin.', 'correios-seller') . '</p>';
-
-            return $fields;
+        if (! $centralized) {
+            $fields['correios_seller_melhor_envio_access_token'] = [
+                'label' => __('Token pessoal', 'correios-seller'),
+                'name' => 'correios_seller[melhor_envio_access_token]',
+                'type' => 'password',
+                'value' => '',
+                'class' => 'wcfm-text wcfm_ele',
+                'label_class' => 'wcfm_title',
+                'hints' => $connected ? __('Conta conectada. Deixe vazio para manter o token.', 'correios-seller') : __('Use OAuth acima ou informe um token pessoal.', 'correios-seller'),
+            ];
         }
 
-        $fields['correios_seller_credential_mode'] = [
-            'label' => __('Credenciais', 'correios-seller'),
-            'name' => 'correios_seller[credential_mode]',
-            'type' => 'select',
-            'class' => 'wcfm-select wcfm_ele',
-            'label_class' => 'wcfm_title',
-            'options' => [
-                'inherit' => __('Usar modo do marketplace', 'correios-seller'),
-                'vendor' => __('Usar minha conta Correios', 'correios-seller'),
-            ],
-            'value' => $settings['credential_mode'],
-        ];
-        $fields['correios_seller_admin_code'] = [
-            'label' => __('Codigo administrativo', 'correios-seller'),
-            'name' => 'correios_seller[admin_code]',
-            'type' => 'text',
-            'value' => $settings['admin_code'],
-            'class' => 'wcfm-text wcfm_ele',
-            'label_class' => 'wcfm_title',
-        ];
-        $fields['correios_seller_posting_card'] = [
-            'label' => __('Cartao de postagem', 'correios-seller'),
-            'name' => 'correios_seller[posting_card]',
-            'type' => 'text',
-            'value' => $settings['posting_card'],
-            'class' => 'wcfm-text wcfm_ele',
-            'label_class' => 'wcfm_title',
-        ];
-        $fields['correios_seller_api_username'] = [
-            'label' => __('Usuario/API', 'correios-seller'),
-            'name' => 'correios_seller[api_username]',
-            'type' => 'text',
-            'value' => $settings['api_username'],
-            'class' => 'wcfm-text wcfm_ele',
-            'label_class' => 'wcfm_title',
-        ];
-        $fields['correios_seller_api_password'] = [
-            'label' => __('Senha/API', 'correios-seller'),
-            'name' => 'correios_seller[api_password]',
-            'type' => 'password',
-            'value' => $settings['api_password'],
-            'class' => 'wcfm-text wcfm_ele',
-            'label_class' => 'wcfm_title',
-        ];
-        $fields['correios_seller_enabled_services'] = [
-            'label' => __('Servicos habilitados', 'correios-seller'),
-            'name' => 'correios_seller[enabled_services]',
-            'type' => 'text',
-            'value' => implode(',', (array) $settings['enabled_services']),
-            'class' => 'wcfm-text wcfm_ele',
-            'label_class' => 'wcfm_title',
-            'hints' => __('Opcional. Codigos separados por virgula.', 'correios-seller'),
-        ];
-
         return $fields;
+    }
+
+    private function melhorEnvioConnectionHtml(bool $connected): string
+    {
+        $action = $connected ? 'frete_marketplace_melhor_envio_disconnect' : 'frete_marketplace_melhor_envio_connect';
+        $nonceAction = $connected ? 'frete_marketplace_melhor_envio_disconnect' : 'frete_marketplace_melhor_envio_connect';
+        $url = wp_nonce_url(admin_url('admin-post.php?action=' . $action . '&target=vendor'), $nonceAction);
+        $label = $connected ? __('Desconectar conta', 'correios-seller') : __('Conectar conta do Melhor Envio', 'correios-seller');
+        $status = $connected ? __('Conta conectada.', 'correios-seller') : __('Conta ainda nao conectada.', 'correios-seller');
+
+        return '<p class="description">' . esc_html($status) . ' <a class="button" href="' . esc_url($url) . '">' . esc_html($label) . '</a></p>';
     }
 
     public function saveFields($vendorId, $formData): void
@@ -283,6 +292,10 @@ final class VendorSettingsPage
         if (isset($formData['correios_seller']) && is_array($formData['correios_seller'])) {
             $settings = $formData['correios_seller'];
             $settings['enabled'] = $settings['enabled'] ?? 'no';
+
+            if (empty($settings['melhor_envio_access_token'])) {
+                unset($settings['melhor_envio_access_token']);
+            }
 
             $this->repository->save($vendorId, $settings);
         }

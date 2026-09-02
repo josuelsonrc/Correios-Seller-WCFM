@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace CorreiosSeller\WCFM;
 
 use CorreiosSeller\Labels\LabelRepository;
-use CorreiosSeller\Labels\MarketplaceLabelService;
-use CorreiosSeller\Support\Options;
+use CorreiosSeller\MelhorEnvio\MelhorEnvioShipmentService;
 
 final class OrderLabelActions
 {
+    private const ACTION_GENERATE = 'frete_marketplace_generate_label';
+    private const LEGACY_ACTION_GENERATE = 'correios_seller_generate_label';
+
     public function __construct(
-        private MarketplaceLabelService $labelService,
+        private MelhorEnvioShipmentService $shipmentService,
         private LabelRepository $labels
     ) {
     }
@@ -19,31 +21,31 @@ final class OrderLabelActions
     public function register(): void
     {
         add_action('after_wcfm_orders_details_items', [$this, 'renderOrderBlock'], 30, 3);
-        add_action('admin_post_correios_seller_generate_label', [$this, 'handleGenerate']);
+        add_action('admin_post_' . self::ACTION_GENERATE, [$this, 'handleGenerate']);
+        add_action('admin_post_' . self::LEGACY_ACTION_GENERATE, [$this, 'handleGenerate']);
     }
 
     public function renderOrderBlock($orderId, $order = null, $lineItems = []): void
     {
-        if (Options::get('labels_enabled', 'yes') !== 'yes') {
-            return;
-        }
-
         $order = $order instanceof \WC_Order ? $order : wc_get_order(absint($orderId));
         if (! $order instanceof \WC_Order) {
             return;
         }
 
-        $vendorIds = $this->visibleVendorIds($order);
+        $vendorIds = array_values(array_filter(
+            $this->visibleVendorIds($order),
+            fn (int $vendorId): bool => $this->shipmentService->orderUsesMelhorEnvio($order, $vendorId)
+        ));
         if ($vendorIds === []) {
             return;
         }
 
         $notice = $this->notice();
 
-        echo '<div class="page_collapsible orders_details_correios_seller" id="wcfm_orders_correios_seller_label_options">';
-        echo esc_html__('Etiquetas Correios', 'correios-seller');
+        echo '<div class="page_collapsible orders_details_frete_marketplace" id="wcfm_orders_frete_marketplace_label_options">';
+        echo esc_html__('Etiquetas Melhor Envio', 'correios-seller');
         echo '<span></span></div>';
-        echo '<div class="wcfm-container"><div id="wcfm_orders_correios_seller_label_expander" class="wcfm-content">';
+        echo '<div class="wcfm-container"><div id="wcfm_orders_frete_marketplace_label_expander" class="wcfm-content">';
 
         if ($notice !== '') {
             echo wp_kses_post($notice);
@@ -54,6 +56,7 @@ final class OrderLabelActions
             $label = $this->labels->get($order, $vendorId);
             $status = (string) ($label['status'] ?? 'not_generated');
             $trackingCode = (string) ($label['tracking_code'] ?? '');
+            $protocol = (string) ($label['protocol'] ?? '');
 
             echo '<tr>';
             echo '<td class="name">';
@@ -61,26 +64,28 @@ final class OrderLabelActions
             echo '<span>' . esc_html($this->statusLabel($status)) . '</span>';
             if ($trackingCode !== '') {
                 echo '<br /><span>' . esc_html__('Rastreio:', 'correios-seller') . ' ' . esc_html($trackingCode) . '</span>';
+            } elseif ($protocol !== '') {
+                echo '<br /><span>' . esc_html__('Protocolo:', 'correios-seller') . ' ' . esc_html($protocol) . '</span>';
             }
             echo '</td>';
 
             echo '<td class="line_cost" style="text-align:right">';
             if (! empty($label['label_url'])) {
-                echo '<a class="wcfm_submit_button" target="_blank" href="' . esc_url((string) $label['label_url']) . '">';
+                echo '<a class="wcfm_submit_button" target="_blank" rel="noopener noreferrer" href="' . esc_url((string) $label['label_url']) . '">';
                 echo esc_html__('Baixar etiqueta', 'correios-seller');
                 echo '</a> ';
             }
 
             if ($this->canGenerate($order, $vendorId)) {
-                $buttonLabel = in_array($status, ['label_requested', 'label_pending'], true)
+                $buttonLabel = in_array($status, ['carted', 'checked_out', 'generated'], true)
                     ? __('Atualizar etiqueta', 'correios-seller')
                     : __('Gerar etiqueta', 'correios-seller');
 
                 echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin:0">';
-                echo '<input type="hidden" name="action" value="correios_seller_generate_label" />';
+                echo '<input type="hidden" name="action" value="' . esc_attr(self::ACTION_GENERATE) . '" />';
                 echo '<input type="hidden" name="order_id" value="' . esc_attr((string) $order->get_id()) . '" />';
                 echo '<input type="hidden" name="vendor_id" value="' . esc_attr((string) $vendorId) . '" />';
-                wp_nonce_field('correios_seller_generate_label_' . $order->get_id() . '_' . $vendorId);
+                wp_nonce_field($this->nonceAction($order->get_id(), $vendorId));
                 echo '<button type="submit" class="wcfm_submit_button">' . esc_html($buttonLabel) . '</button>';
                 echo '</form>';
             }
@@ -98,7 +103,7 @@ final class OrderLabelActions
         $vendorId = absint($_POST['vendor_id'] ?? 0);
         $nonce = (string) ($_POST['_wpnonce'] ?? '');
 
-        if ($orderId <= 0 || $vendorId <= 0 || ! wp_verify_nonce($nonce, 'correios_seller_generate_label_' . $orderId . '_' . $vendorId)) {
+        if ($orderId <= 0 || $vendorId <= 0 || ! wp_verify_nonce($nonce, $this->nonceAction($orderId, $vendorId))) {
             $this->redirectBack('error', 'Solicitacao de etiqueta invalida.');
         }
 
@@ -112,11 +117,11 @@ final class OrderLabelActions
         }
 
         try {
-            $label = $this->labelService->generateForOrder($order, $vendorId);
-            $status = ($label['status'] ?? '') === 'generated' ? 'success' : 'pending';
+            $label = $this->shipmentService->generateForOrder($order, $vendorId);
+            $status = ! empty($label['label_url']) ? 'success' : 'pending';
             $message = $status === 'success'
-                ? 'Etiqueta Correios gerada com sucesso.'
-                : 'Etiqueta solicitada aos Correios. Clique em atualizar etiqueta em alguns segundos.';
+                ? 'Etiqueta Melhor Envio gerada com sucesso.'
+                : 'Etiqueta criada no Melhor Envio. Clique em atualizar etiqueta em alguns segundos.';
 
             $this->redirectBack($status, $message);
         } catch (\Throwable $exception) {
@@ -135,7 +140,7 @@ final class OrderLabelActions
             return $this->orderHasVendorItems($order, $vendorId) ? [$vendorId] : [];
         }
 
-        return $this->labelService->vendorIdsForOrder($order);
+        return $this->shipmentService->vendorIdsForOrder($order);
     }
 
     private function canGenerate(\WC_Order $order, int $vendorId): bool
@@ -157,7 +162,7 @@ final class OrderLabelActions
 
     private function orderHasVendorItems(\WC_Order $order, int $vendorId): bool
     {
-        foreach ($this->labelService->vendorIdsForOrder($order) as $orderVendorId) {
+        foreach ($this->shipmentService->vendorIdsForOrder($order) as $orderVendorId) {
             if ($orderVendorId === $vendorId) {
                 return true;
             }
@@ -168,8 +173,8 @@ final class OrderLabelActions
 
     private function notice(): string
     {
-        $status = sanitize_key((string) ($_GET['correios_seller_label_status'] ?? ''));
-        $message = sanitize_text_field((string) ($_GET['correios_seller_label_message'] ?? ''));
+        $status = sanitize_key((string) ($_GET['frete_marketplace_label_status'] ?? $_GET['correios_seller_label_status'] ?? ''));
+        $message = sanitize_text_field((string) ($_GET['frete_marketplace_label_message'] ?? $_GET['correios_seller_label_message'] ?? ''));
         if ($status === '' || $message === '') {
             return '';
         }
@@ -185,23 +190,33 @@ final class OrderLabelActions
     private function redirectBack(string $status, string $message): void
     {
         $url = wp_get_referer() ?: admin_url();
-        $url = remove_query_arg(['correios_seller_label_status', 'correios_seller_label_message'], $url);
+        $url = remove_query_arg([
+            'frete_marketplace_label_status',
+            'frete_marketplace_label_message',
+            'correios_seller_label_status',
+            'correios_seller_label_message',
+        ], $url);
         $url = add_query_arg([
-            'correios_seller_label_status' => sanitize_key($status),
-            'correios_seller_label_message' => $message,
+            'frete_marketplace_label_status' => sanitize_key($status),
+            'frete_marketplace_label_message' => $message,
         ], $url);
 
         wp_safe_redirect($url);
         exit;
     }
 
+    private function nonceAction(int $orderId, int $vendorId): string
+    {
+        return self::ACTION_GENERATE . '_' . $orderId . '_' . $vendorId;
+    }
+
     private function statusLabel(string $status): string
     {
         return match ($status) {
-            'preposted' => __('Pre-postagem criada', 'correios-seller'),
-            'label_requested' => __('Rotulo solicitado', 'correios-seller'),
-            'label_pending' => __('Rotulo em processamento', 'correios-seller'),
+            'carted' => __('Envio criado no carrinho', 'correios-seller'),
+            'checked_out' => __('Envio comprado', 'correios-seller'),
             'generated' => __('Etiqueta gerada', 'correios-seller'),
+            'printed' => __('Etiqueta disponivel', 'correios-seller'),
             'error' => __('Erro na etiqueta', 'correios-seller'),
             default => __('Etiqueta nao gerada', 'correios-seller'),
         };

@@ -6,7 +6,7 @@ namespace CorreiosSeller\Labels;
 
 final class LabelRepository
 {
-    public const META_KEY = '_correios_seller_labels';
+    public const META_KEY = '_frete_marketplace_melhor_envio_labels';
 
     /**
      * @return array<int,array<string,mixed>>
@@ -24,7 +24,7 @@ final class LabelRepository
     public function get(\WC_Order $order, int $vendorId): array
     {
         $labels = $this->all($order);
-        $label = $labels[$vendorId] ?? [];
+        $label = $labels[$vendorId] ?? $labels[(string) $vendorId] ?? [];
 
         return is_array($label) ? $label : [];
     }
@@ -35,7 +35,8 @@ final class LabelRepository
     public function save(\WC_Order $order, int $vendorId, array $label): void
     {
         $labels = $this->all($order);
-        $labels[$vendorId] = array_merge($labels[$vendorId] ?? [], $label, [
+        $previous = $labels[$vendorId] ?? $labels[(string) $vendorId] ?? [];
+        $labels[$vendorId] = array_merge(is_array($previous) ? $previous : [], $label, [
             'vendor_id' => $vendorId,
             'updated_at' => current_time('mysql'),
         ]);

@@ -20,7 +20,7 @@ final class Logger
     {
         if (function_exists('wc_get_logger')) {
             wc_get_logger()->log($level, $message, [
-                'source' => 'correios-seller',
+                'source' => 'frete-marketplace',
                 'context' => $context,
             ]);
         }

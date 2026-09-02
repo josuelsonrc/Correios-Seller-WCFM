@@ -28,7 +28,7 @@ final class ProductShippingPackageFactory
         $lineTotal = (float) wc_get_price_excluding_tax($product, ['qty' => $quantity]);
         $lineTotalWithTax = (float) wc_get_price_including_tax($product, ['qty' => $quantity]);
         $lineTax = max(0.0, $lineTotalWithTax - $lineTotal);
-        $cartItemKey = 'correios_seller_product_' . md5($product->get_id() . '|' . $quantity . '|' . $postcode);
+        $cartItemKey = 'frete_marketplace_product_' . md5($product->get_id() . '|' . $quantity . '|' . $postcode);
 
         $item = [
             'key' => $cartItemKey,
@@ -66,7 +66,7 @@ final class ProductShippingPackageFactory
             'cart_subtotal' => $lineTotal,
             'seller_id' => $vendorId,
             'vendor_id' => $vendorId,
-            'package_id' => 'correios_seller_product_' . $cartItemKey,
+            'package_id' => 'frete_marketplace_product_' . $cartItemKey,
             'package_name' => sprintf(__('Produto de %s', 'correios-seller'), $this->vendorName($vendorId)),
         ];
     }
